@@ -39,9 +39,9 @@ local function trim_table(tbl)
 end
 
 local default_options = {
-    model = "mistral",
-    host = "localhost",
-    port = "11434",
+    model = "llama-3.1-405b",
+    host = "api.venice.ai/api/v1",
+    -- port = "11434", # port is not needed here
     file = false,
     debug = false,
     body = {stream = true},
@@ -51,9 +51,15 @@ local default_options = {
     accept_map = "<c-cr>",
     retry_map = "<c-r>",
     hidden = false,
+    api_key = function ()
+        return os.getenv("VENICE_API")
+    end,
     command = function(options)
-        return "curl --silent --no-buffer -X POST http://" .. options.host ..
-                   ":" .. options.port .. "/api/chat -d $body"
+        return "curl --silent --no-buffer -X POST https://" .. options.host ..
+            "/chat/completions" ..
+            "--header 'Authorization: Bearer " .. options.api_key() .. "' " ..
+            "--header 'Content-Type: application/json' " ..
+            " -d $body"
     end,
     json_response = true,
     display_mode = "float",
@@ -62,8 +68,8 @@ local default_options = {
     init = "", -- disable ollama initiation
     list_models = function(options)
         local response = vim.fn.systemlist(
-                             "curl --silent --no-buffer http://" .. options.host ..
-                                 ":" .. options.port .. "/api/tags")
+            "curl --silent --no-buffer https://" .. options.host ..
+            "/models" .. "--header 'Authorization: Bearer " .. options.api_key() .. "' ")
         local list = vim.fn.json_decode(response)
         local models = {}
         for key, _ in pairs(list.models) do
@@ -581,9 +587,9 @@ function Process_response(str, json_response)
                     -- Clear the buffer as we're done with this sequence of messages
                     globals.context_buffer = ""
                 end
-            elseif result.choices then -- groq chat endpoint
+            elseif result.choices then -- venice api
                 local choice = result.choices[1]
-                local content = choice.delta.content
+                local content = choice.message.content
                 text = content
 
                 if content ~= nil then
